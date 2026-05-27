@@ -38,6 +38,10 @@ session:
 auth:
   bearer-token: ${RELAY_BEARER_TOKEN:change-me-locally}
 
+cors:
+  # Capacitor WebView origins (iOS: capacitor://, ionic://; Android: http://localhost).
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:capacitor://localhost,ionic://localhost,http://localhost,https://localhost}
+
 management:
   endpoints:
     web:
