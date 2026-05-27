@@ -1,0 +1,53 @@
+server:
+  port: 8080
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: ajax-relay
+  datasource:
+    url: jdbc:sqlite:${RELAY_DB_PATH:./relay.db}
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        show_sql: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true
+
+aws:
+  region: ${AWS_REGION:us-east-2}
+  dev-instance-id: ${DEV_INSTANCE_ID:i-xxxxxxxxxxxxxxxxx}
+
+ssh:
+  dev-host: ${DEV_HOST:172.31.9.200}
+  dev-user: ${DEV_USER:ec2-user}
+  private-key-path: ${DEV_SSH_KEY_PATH:/home/ec2-user/.ssh/relay-to-dev}
+
+session:
+  idle-threshold-minutes: ${IDLE_THRESHOLD_MINUTES:15}
+  idle-check-interval-seconds: ${IDLE_CHECK_INTERVAL_SECONDS:60}
+  ssh-ready-timeout-seconds: ${SSH_READY_TIMEOUT_SECONDS:120}
+
+auth:
+  bearer-token: ${RELAY_BEARER_TOKEN:change-me-locally}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.ajax.relay: INFO
+    org.apache.sshd: WARN

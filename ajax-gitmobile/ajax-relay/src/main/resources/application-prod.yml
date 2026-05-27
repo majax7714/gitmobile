@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:${RELAY_DB_PATH:/var/lib/ajax-relay/relay.db}
+
+logging:
+  level:
+    com.ajax.relay: INFO
+  file:
+    name: /var/log/ajax-relay/relay.log
