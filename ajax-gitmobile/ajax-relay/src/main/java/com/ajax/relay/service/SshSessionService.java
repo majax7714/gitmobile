@@ -28,6 +28,9 @@ public class SshSessionService {
     @Value("${ssh.dev-user}")
     private String user;
 
+    @Value("${ssh.dev-port:22}")
+    private int port;
+
     @Value("${ssh.private-key-path}")
     private String keyPath;
 
@@ -35,10 +38,13 @@ public class SshSessionService {
     private long readyTimeoutSeconds;
 
     public ClientSession openSession() throws IOException {
+        // TODO(security): AcceptAll trusts whatever host key the dev box presents.
+        // Fine while we control both endpoints in one VPC; before exposing this to
+        // others, pin the dev box's fingerprint with a KnownHostsServerKeyVerifier.
         sshClient.setServerKeyVerifier(AcceptAllServerKeyVerifier.INSTANCE);
         sshClient.setKeyIdentityProvider(new FileKeyPairProvider(Paths.get(keyPath)));
 
-        ClientSession session = sshClient.connect(user, host, 22)
+        ClientSession session = sshClient.connect(user, host, port)
                 .verify(Duration.ofSeconds(readyTimeoutSeconds))
                 .getSession();
 
@@ -62,7 +68,7 @@ public class SshSessionService {
         long deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(timeoutSeconds);
         sshClient.setServerKeyVerifier(AcceptAllServerKeyVerifier.INSTANCE);
         while (System.currentTimeMillis() < deadline) {
-            try (ClientSession s = sshClient.connect(user, host, 22)
+            try (ClientSession s = sshClient.connect(user, host, port)
                     .verify(Duration.ofSeconds(5)).getSession()) {
                 return true;
             } catch (Exception e) {

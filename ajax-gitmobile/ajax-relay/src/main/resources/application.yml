@@ -27,6 +27,7 @@ aws:
 
 ssh:
   dev-host: ${DEV_HOST:172.31.9.200}
+  dev-port: ${DEV_SSH_PORT:22}
   dev-user: ${DEV_USER:ec2-user}
   private-key-path: ${DEV_SSH_KEY_PATH:/home/ec2-user/.ssh/relay-to-dev}
 

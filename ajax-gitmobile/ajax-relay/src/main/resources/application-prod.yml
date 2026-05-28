@@ -2,8 +2,10 @@ spring:
   datasource:
     url: jdbc:sqlite:${RELAY_DB_PATH:/var/lib/ajax-relay/relay.db}
 
+# The systemd unit redirects stdout/stderr (the console appender) to
+# /var/log/ajax-relay/relay.log via StandardOutput=append:. Do NOT also set
+# logging.file.name here, or Spring's file appender writes the same file a
+# second time and every line is duplicated.
 logging:
   level:
     com.ajax.relay: INFO
-  file:
-    name: /var/log/ajax-relay/relay.log
