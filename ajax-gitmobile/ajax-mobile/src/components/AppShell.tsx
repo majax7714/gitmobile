@@ -79,7 +79,14 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
     managedRef.current = managed;
     setTerm(managed.term);
 
+    // Re-fit on any host size change — keyboard, tab toggle, orientation, or
+    // the accessory-bar/tab-nav swap all resize this element. fit() only
+    // resizes xterm's rows/cols (not the host), so this can't loop.
+    const ro = new ResizeObserver(() => scheduleRefit());
+    ro.observe(el);
+
     return () => {
+      ro.disconnect();
       if (refitTimerRef.current != null) {
         window.clearTimeout(refitTimerRef.current);
         refitTimerRef.current = null;

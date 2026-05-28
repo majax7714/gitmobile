@@ -115,10 +115,12 @@ export function useShellSocket(term: Terminal | null) {
           offset += c.length;
         }
       }
-      // Pin to the bottom on every write so the active input line stays in view
-      // as output streams in — including right after a keyboard show shrinks
-      // the viewport.
-      term.write(data);
+      // Pin to the bottom so the active input line stays in view as output
+      // streams in. xterm 5.x has no `scrollOnOutput` option, so we scroll in
+      // the write-completion callback (runs after the parser finishes this
+      // chunk — the equivalent behavior). The synchronous call is a harmless
+      // backup for the first paint before the callback fires.
+      term.write(data, () => term.scrollToBottom());
       term.scrollToBottom();
     };
 

@@ -28,7 +28,9 @@ export function createTerminal(container: HTMLElement): ManagedTerminal {
     // walking right.
     convertEol: true,
     // Jump the view to the bottom on any keystroke (xterm default, set
-    // explicitly) so typing always reveals the active prompt line.
+    // explicitly) so typing always reveals the active prompt line. Note: xterm
+    // 5.x has no `scrollOnOutput` option — following server output to the bottom
+    // is handled by the write-completion scroll in useShellSocket's flush().
     scrollOnUserInput: true,
     // Lets addons opt into proposed xterm APIs.
     allowProposedApi: true,

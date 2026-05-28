@@ -17,22 +17,42 @@ export function useKeyboardInset(onChange?: (visible: boolean) => void) {
     }
 
     const root = document.documentElement;
-    let showHandle: PluginListenerHandle | undefined;
-    let hideHandle: PluginListenerHandle | undefined;
+    const handles: PluginListenerHandle[] = [];
+    const track = (p: Promise<PluginListenerHandle>) => {
+      void p.then((h) => handles.push(h));
+    };
 
-    void Keyboard.addListener('keyboardWillShow', (info) => {
-      root.style.setProperty('--kb-height', `${info.keyboardHeight}px`);
-      onChange?.(true);
-    }).then((h) => (showHandle = h));
-
-    void Keyboard.addListener('keyboardWillHide', () => {
-      root.style.setProperty('--kb-height', '0px');
-      onChange?.(false);
-    }).then((h) => (hideHandle = h));
+    // Will* events fire before the animation (drive the responsive UI swap);
+    // Did* events fire after it settles (re-fit against the final size).
+    track(
+      Keyboard.addListener('keyboardWillShow', (info) => {
+        root.style.setProperty('--kb-height', `${info.keyboardHeight}px`);
+        onChange?.(true);
+      }),
+    );
+    track(
+      Keyboard.addListener('keyboardDidShow', (info) => {
+        root.style.setProperty('--kb-height', `${info.keyboardHeight}px`);
+        onChange?.(true);
+      }),
+    );
+    track(
+      Keyboard.addListener('keyboardWillHide', () => {
+        root.style.setProperty('--kb-height', '0px');
+        onChange?.(false);
+      }),
+    );
+    track(
+      Keyboard.addListener('keyboardDidHide', () => {
+        root.style.setProperty('--kb-height', '0px');
+        onChange?.(false);
+      }),
+    );
 
     return () => {
-      void showHandle?.remove();
-      void hideHandle?.remove();
+      for (const h of handles) {
+        void h.remove();
+      }
       root.style.setProperty('--kb-height', '0px');
     };
   }, [onChange]);
