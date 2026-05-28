@@ -14,6 +14,7 @@
     "@capacitor/browser": "^6.0.6",
     "@capacitor/clipboard": "^6.0.3",
     "@capacitor/core": "^6.1.2",
+    "@capacitor/keyboard": "^6.0.4",
     "@capacitor/preferences": "^6.0.2",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.12.0",

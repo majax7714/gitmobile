@@ -19,6 +19,20 @@ over a WebSocket — rendered with [xterm.js](https://xtermjs.org/).
   `@capacitor/app`). This drives the backend's idle auto-stop.
 - **Reconnect** — on a dropped socket or network change, shows a disconnected
   state and offers a fresh-shell reconnect (PTY state is not preserved).
+- **Bottom tab navigation** — Terminal and Repos tabs under a persistent top bar
+  (status pill + Wake/Connect/Disconnect + Token). The xterm instance is mounted
+  once and hidden (never unmounted) across tab switches.
+- **Scripted wake** — a successful Wake auto-opens the shell, runs
+  `~/wake-init.sh` once, and lands you on the Terminal tab to watch repo syncing.
+- **Repos tab** — a finder-style list from `gh repo list` (run on the dev box,
+  not in your interactive terminal), marking which repos are cloned under
+  `~/repos`, with per-row Open / Clone actions.
+
+See [`docs/mobile-features.md`](docs/mobile-features.md) for the architecture and
+design decisions behind these.
+
+> GitHub auth lives entirely on the dev box (`gh`); no GitHub tokens are stored
+> on the device. The only client-side secret is the relay bearer token.
 
 ## Backend endpoints
 
@@ -73,21 +87,26 @@ Because the relay serves a valid Let's Encrypt certificate, `https://` and
 ```
 src/
 ├── main.tsx              React entry
-├── App.tsx               routes between Setup and Terminal screens
+├── App.tsx               routes between Setup and the app shell
 ├── config.ts             relay host, URLs, intervals, timeouts
 ├── components/
 │   ├── SetupScreen.tsx   first-run token paste
-│   ├── TerminalScreen.tsx xterm mount + controls + reconnect
-│   ├── StatusPill.tsx    STOPPED/STARTING/RUNNING indicator
-│   └── WakeButton.tsx    /start + cold-start progress
+│   ├── AppShell.tsx      root authed view: terminal mount + tabs + session
+│   ├── TopBar.tsx        status pill + Wake/Connect/Disconnect + Token
+│   ├── BottomTabBar.tsx  Terminal / Repos tab nav
+│   ├── ReposScreen.tsx   gh repo list browser, Open/Clone actions
+│   ├── TerminalAccessoryBar.tsx  Esc/Tab/Ctrl/arrows, Copy/Paste, URL field
+│   └── StatusPill.tsx    STOPPED/STARTING/RUNNING indicator
 ├── hooks/
 │   ├── useRelaySession.ts start/stop/status + polling
 │   ├── useShellSocket.ts  WebSocket ↔ xterm byte piping
+│   ├── useShellExec.ts    one-off command exec over a short-lived WS
+│   ├── useKeyboardInset.ts keyboard show/hide → manual layout lift
 │   └── useHeartbeat.ts    30s heartbeat, paused in background
 ├── lib/
 │   ├── api.ts            fetch wrapper, injects Bearer header
 │   ├── secureStore.ts    Capacitor Preferences token storage
-│   └── terminal.ts       xterm setup, fit addon, dark theme
+│   └── terminal.ts       xterm setup, fit + web-links addons, theme
 └── styles/
     └── terminal.css      dark, mobile-safe layout
 ```

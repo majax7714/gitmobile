@@ -10,6 +10,10 @@
   --green: #3fb950;
   --yellow: #d29922;
   --red: #f85149;
+  /* Set by useKeyboardInset to the on-screen keyboard height; the app shell's
+     bottom rides up by this amount so the input stays flush above the keyboard
+     (the WebView itself does not resize — KeyboardResize.None). */
+  --kb-inset: 0px;
 }
 
 * {
@@ -47,6 +51,73 @@ body {
   height: 100%;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The tabbed app shell is pinned to the viewport; its bottom edge rides up by
+   the keyboard height so content (and the accessory bar) stays above the
+   keyboard while the WebView itself never resizes. */
+.app-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--kb-inset, 0px);
+  height: auto;
+  padding-bottom: 0;
+  transition: bottom 0.18s ease-out;
+}
+
+/* ---- tabbed content ---- */
+.tab-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.tab-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-hidden {
+  display: none;
+}
+
+/* ---- bottom tab bar ---- */
+.tab-bar {
+  flex-shrink: 0;
+  display: flex;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab-btn {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 0 6px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-btn-active {
+  color: var(--accent);
+}
+
+.tab-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 /* ---- setup screen ---- */
@@ -117,12 +188,49 @@ body {
   font-size: 15px;
 }
 
-/* ---- controls ---- */
-.controls {
+/* ---- top bar action cluster ---- */
+.bar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
+  gap: 8px;
+}
+
+.top-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  padding: 7px 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.top-action.wake {
+  background: var(--green);
+  color: #04260f;
+}
+
+.top-action.primary {
+  background: var(--accent);
+  color: #04162f;
+}
+
+.top-action.primary:active {
+  background: var(--accent-press);
+}
+
+.top-action.ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.top-action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .primary-btn,
@@ -381,6 +489,131 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
+}
+
+/* ---- repos tab ---- */
+.repos-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.repos-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.repos-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.repos-banner {
+  margin-top: 8px;
+}
+
+.repos-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.repos-pull {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.repos-empty {
+  padding: 24px 16px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 14px;
+}
+
+.repo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.repo-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.repo-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.repo-vis {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.repo-name {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-updated {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.repo-desc {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  /* Clamp to two lines so rows stay tidy. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.repo-actions {
+  flex: 0 0 auto;
+}
+
+.repo-btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.repo-btn.open {
+  background: var(--accent);
+  color: #04162f;
+  border: 1px solid var(--accent);
+}
+
+.repo-btn.clone {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 /* ---- spinner ---- */

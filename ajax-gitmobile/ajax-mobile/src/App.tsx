@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clearToken, getToken } from './lib/secureStore';
 import { SetupScreen } from './components/SetupScreen';
-import { TerminalScreen } from './components/TerminalScreen';
+import { AppShell } from './components/AppShell';
 
 type Screen = 'loading' | 'setup' | 'terminal';
 
@@ -21,7 +21,7 @@ export default function App() {
   }
 
   return (
-    <TerminalScreen
+    <AppShell
       onResetToken={() => {
         void clearToken().then(() => setScreen('setup'));
       }}

@@ -1,0 +1,192 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Terminal } from '@xterm/xterm';
+import { createTerminal, type ManagedTerminal } from '../lib/terminal';
+import { useRelaySession } from '../hooks/useRelaySession';
+import { useShellSocket } from '../hooks/useShellSocket';
+import { useHeartbeat } from '../hooks/useHeartbeat';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
+import { TopBar } from './TopBar';
+import { BottomTabBar, type Tab } from './BottomTabBar';
+import { TerminalAccessoryBar } from './TerminalAccessoryBar';
+import { ReposScreen } from './ReposScreen';
+
+// The persistent app shell: top bar + tabbed content + bottom nav. It owns the
+// single xterm instance and the shell/session state so both the top bar and the
+// Repos tab can drive the same terminal. The terminal is mounted once and only
+// hidden (never unmounted) when the Repos tab is active, so the live shell
+// survives tab switches.
+export function AppShell({ onResetToken }: { onResetToken: () => void }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const managedRef = useRef<ManagedTerminal | null>(null);
+  const [term, setTerm] = useState<Terminal | null>(null);
+  const [online, setOnline] = useState(true);
+  const [tab, setTab] = useState<Tab>('terminal');
+
+  const { tracked, waking, error, wake } = useRelaySession();
+  const { state: shellState, connect, disconnect, sendInput } = useShellSocket(term);
+
+  useHeartbeat(shellState === 'connected');
+
+  const refit = useCallback(() => managedRef.current?.fit.fit(), []);
+  useKeyboardInset(refit);
+
+  // Mount the xterm terminal once.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    const managed = createTerminal(el);
+    managedRef.current = managed;
+    setTerm(managed.term);
+
+    const onResize = () => managed.fit.fit();
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      managed.dispose();
+      managedRef.current = null;
+      setTerm(null);
+    };
+  }, []);
+
+  // Refit when a shell connects or when the terminal tab becomes visible again
+  // (it has no measurable size while display:none on the Repos tab).
+  useEffect(() => {
+    if (shellState === 'connected' || tab === 'terminal') {
+      const id = window.setTimeout(() => managedRef.current?.fit.fit(), 0);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [shellState, tab]);
+
+  // Surface network changes; a real drop is also caught by the socket's onclose.
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  const running = tracked === 'RUNNING';
+  const connected = shellState === 'connected';
+  const connecting = shellState === 'connecting';
+  const dropped = shellState === 'disconnected' || shellState === 'error';
+  const canConnect = running && term != null && !connected && !connecting;
+
+  // --- Auto-connect + queued input -----------------------------------------
+  // autoConnectRef: a wake we initiated should open the shell once RUNNING.
+  // pendingInputRef: a line to deliver to the terminal as soon as it connects
+  // (used for the wake-init script and for Repo tab actions).
+  const autoConnectRef = useRef(false);
+  const pendingInputRef = useRef<string | null>(null);
+
+  // After an app-initiated wake reaches RUNNING, open the shell automatically.
+  useEffect(() => {
+    if (autoConnectRef.current && running && term != null && !connected && !connecting) {
+      autoConnectRef.current = false;
+      void connect();
+    }
+  }, [running, term, connected, connecting, connect]);
+
+  // Flush a queued line once the shell is live. Cleared after sending, so it
+  // never re-runs on a later reconnect — the wake-init is one-shot per wake.
+  useEffect(() => {
+    if (connected && pendingInputRef.current != null) {
+      sendInput(pendingInputRef.current);
+      pendingInputRef.current = null;
+    }
+  }, [connected, sendInput]);
+
+  const handleWake = useCallback(() => {
+    // On a successful wake: open the shell, run the startup script once, and
+    // land the user on the terminal so they watch repo syncing.
+    autoConnectRef.current = true;
+    pendingInputRef.current = 'bash ~/wake-init.sh\n';
+    setTab('terminal');
+    void wake();
+  }, [wake]);
+
+  const handleDisconnect = useCallback(() => {
+    autoConnectRef.current = false;
+    pendingInputRef.current = null;
+    disconnect();
+  }, [disconnect]);
+
+  // Run a command on the interactive terminal, connecting first if needed, and
+  // switch to the terminal tab so the user sees the output.
+  const runOnTerminal = useCallback(
+    (line: string) => {
+      setTab('terminal');
+      if (connected) {
+        sendInput(line);
+      } else {
+        pendingInputRef.current = line;
+        if (canConnect) {
+          void connect();
+        }
+      }
+    },
+    [connected, canConnect, connect, sendInput],
+  );
+
+  const openRepo = useCallback(
+    (name: string) => runOnTerminal(`cd ~/repos/${name}\n`),
+    [runOnTerminal],
+  );
+  const cloneRepo = useCallback(
+    (name: string) => runOnTerminal(`gh repo clone ${name} ~/repos/${name}\n`),
+    [runOnTerminal],
+  );
+
+  return (
+    <div className="screen app-shell">
+      <TopBar
+        tracked={tracked}
+        waking={waking}
+        connecting={connecting}
+        connected={connected}
+        dropped={dropped}
+        canConnect={canConnect}
+        onWake={handleWake}
+        onConnect={() => void connect()}
+        onDisconnect={handleDisconnect}
+        onResetToken={onResetToken}
+      />
+
+      {!online && <div className="banner banner-warn">Network offline</div>}
+      {dropped && (
+        <div className="banner banner-warn">
+          Shell disconnected — tap Reconnect for a fresh session.
+        </div>
+      )}
+      {error && <div className="banner banner-error">{error}</div>}
+
+      <div className="tab-content">
+        <div className={`tab-pane${tab === 'terminal' ? '' : ' tab-hidden'}`}>
+          <div className="terminal-host" ref={containerRef} />
+          <TerminalAccessoryBar
+            term={term}
+            sendInput={sendInput}
+            disabled={!connected}
+          />
+        </div>
+        <div className={`tab-pane${tab === 'repos' ? '' : ' tab-hidden'}`}>
+          <ReposScreen
+            running={running}
+            onOpenRepo={openRepo}
+            onCloneRepo={cloneRepo}
+          />
+        </div>
+      </div>
+
+      <BottomTabBar active={tab} onChange={setTab} />
+    </div>
+  );
+}
