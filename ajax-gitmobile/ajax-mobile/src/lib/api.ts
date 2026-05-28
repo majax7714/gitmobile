@@ -69,3 +69,36 @@ export async function sendHeartbeat(): Promise<void> {
     throw new Error(`heartbeat request failed (${res.status})`);
   }
 }
+
+interface ExecResult {
+  stdout: string;
+  exitCode: number;
+}
+
+/**
+ * Runs an allowlisted command on the dev box via a dedicated SSH exec channel
+ * and returns its raw stdout. Unlike the interactive shell WebSocket, this gives
+ * pristine program output (no prompt/echo/ANSI), so callers can JSON.parse the
+ * result directly. The command must match the relay's server-side allowlist.
+ */
+export async function execCommand(cmd: string): Promise<string> {
+  const res = await authFetch('/exec', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cmd }),
+  });
+  if (!res.ok) {
+    let msg = `exec request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) {
+        msg = body.error;
+      }
+    } catch {
+      /* non-JSON error body; keep the status message */
+    }
+    throw new Error(msg);
+  }
+  const data = (await res.json()) as ExecResult;
+  return data.stdout;
+}

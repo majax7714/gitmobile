@@ -21,7 +21,12 @@ export function createTerminal(container: HTMLElement): ManagedTerminal {
     fontSize: 14,
     lineHeight: 1.2,
     letterSpacing: 0,
-    scrollback: 2000,
+    // Capped scrollback keeps the DOM renderer's memory/work bounded under the
+    // heavy output bursts from wake-init.sh.
+    scrollback: 1000,
+    // Normalize bare \n to \r\n so lines render efficiently without the cursor
+    // walking right.
+    convertEol: true,
     // Lets addons opt into proposed xterm APIs.
     allowProposedApi: true,
     theme: {

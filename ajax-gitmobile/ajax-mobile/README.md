@@ -44,6 +44,7 @@ All REST endpoints require an `Authorization: Bearer <token>` header.
 | POST   | `/api/session/start`     | Start the EC2 dev box (idempotent)   |
 | POST   | `/api/session/stop`      | Stop the EC2 dev box                 |
 | POST   | `/api/session/heartbeat` | Reset the idle timer                 |
+| POST   | `/api/exec`              | Run an allowlisted command over an SSH exec channel; returns `{stdout, exitCode}` |
 
 The shell WebSocket is `wss://<host>/api/shell?token=<token>`. Webview
 WebSocket APIs cannot set custom headers, so the relay accepts the bearer
@@ -99,12 +100,11 @@ src/
 │   └── StatusPill.tsx    STOPPED/STARTING/RUNNING indicator
 ├── hooks/
 │   ├── useRelaySession.ts start/stop/status + polling
-│   ├── useShellSocket.ts  WebSocket ↔ xterm byte piping
-│   ├── useShellExec.ts    one-off command exec over a short-lived WS
+│   ├── useShellSocket.ts  WebSocket ↔ xterm byte piping (batched writes)
 │   ├── useKeyboardInset.ts keyboard show/hide → manual layout lift
 │   └── useHeartbeat.ts    30s heartbeat, paused in background
 ├── lib/
-│   ├── api.ts            fetch wrapper, injects Bearer header
+│   ├── api.ts            fetch wrapper + execCommand (POST /api/exec)
 │   ├── secureStore.ts    Capacitor Preferences token storage
 │   └── terminal.ts       xterm setup, fit + web-links addons, theme
 └── styles/

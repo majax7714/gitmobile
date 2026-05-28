@@ -68,19 +68,20 @@ shell is offline is queued and delivered on the next connect.
 ## 4. Repos tab — finder-style browser
 
 `ReposScreen` lists GitHub repos and local clones. On mount (when the box is
-running) and on refresh it runs **one** shell command via `useShellExec`:
+running) and on refresh it makes two calls to `execCommand` (`lib/api.ts`),
+which `POST`s to the relay's `/api/exec` endpoint:
 
-```sh
-gh repo list --json name,description,updatedAt,isPrivate --limit 100
-printf '\n__REPO_SPLIT__\n'
-ls -1 ~/repos 2>/dev/null || true
+```
+gh repo list --json name,description,updatedAt,isPrivate --limit 100   → JSON
+ls ~/repos                                                              → names
 ```
 
-The output is split on the marker: the JSON half is parsed into rows; the `ls`
-half becomes the set of local clones (a single `ls ~/repos` intersected with the
-list — far cheaper than a per-repo existence check). Rows are sorted by
-`updatedAt` and show: public/private icon, name, two-line-clamped description,
-and a relative timestamp ("2d ago").
+The first response's `stdout` is **raw JSON** — parsed directly, no
+sanitization. The second is the set of local clones (a single `ls ~/repos`
+intersected with the list — far cheaper than a per-repo existence check) and is
+best-effort: it exits non-zero (surfaced as an error the client swallows) until
+`~/repos` exists. Rows are sorted by `updatedAt` and show: public/private icon,
+name, two-line-clamped description, and a relative timestamp ("2d ago").
 
 Each row has one action:
 
@@ -92,26 +93,32 @@ Each row has one action:
 Pull-to-refresh (engages only at scroll-top) and a header **Refresh** button both
 re-fetch.
 
-### `useShellExec` — the exec channel
+### Why a dedicated exec channel (`POST /api/exec`)
 
-Running a command without polluting the user's interactive terminal needs a
-**separate, short-lived WebSocket** to the same relay shell endpoint. The relay
-shell is a PTY, so it echoes the typed command and surrounds output with prompt
-noise. The hook handles this by bracketing output in per-call random markers:
+The first cut of the Repos tab scraped command output from the interactive shell
+WebSocket. That was abandoned: the relay shell is a **PTY**, so its transcript
+interleaves the shell prompt, command echo, and terminal escape sequences
+(window-title/bracketed-paste OSC codes, CSI toggles) with the actual output. No
+amount of client-side regex reliably extracts JSON from that — confirmed on the
+dev box, where `gh repo list --json` produces pristine JSON at the source and the
+corruption is purely the PTY channel's doing.
 
-```sh
-printf '\n__EXEC_BEGIN_<id>__\n'; <command>; printf '\n__EXEC_END_<id>__\n'
-```
+The fix is architectural: a separate channel that never involves a PTY.
+`SshSessionService.execCommand()` opens a MINA **exec** channel (not a shell),
+captures stdout to a buffer until EOF, checks the exit status, and returns the
+raw bytes. The `POST /api/exec` controller wraps it as
+`{cmd} → {stdout, exitCode}`.
 
-It then slices between **`lastIndexOf(BEGIN)`** and the following `END`. Using
-the *last* BEGIN is the trick: the PTY's echo of the command line (which contains
-the marker literally) comes first, and the real output marker comes after the
-command actually executes. ANSI escapes and `\r` are stripped before parsing. A
-20s timeout rejects a stuck command.
+**The allowlist is the security boundary.** `/api/exec` runs commands on the dev
+box, so without restriction it would be remote code execution. Each command must
+both (a) match an allowed prefix (`gh repo list`, `ls -la ~/repos`, `ls ~/repos`)
+and (b) contain no shell metacharacters (`; & | < > \` $ \ newline`) — so a prefix
+match can't be extended into a chained/redirected command. Integration tests
+cover the clean-JSON unwrap, an off-allowlist rejection, and a chained-command
+rejection.
 
-**Assumptions to validate on-device:** (a) the relay permits a second concurrent
-shell connection; (b) a non-login PTY has `gh` on `PATH`. If `gh` isn't found,
-wrap the exec command in a login shell (`bash -lc '…'`).
+The interactive shell WebSocket (`/api/shell`) is unchanged — wake-init.sh and
+user-typed commands still run there.
 
 ## 5. Terminal & keyboard polish
 
@@ -152,8 +159,8 @@ These earlier features were explicitly kept working:
 | `components/AppShell.tsx` | **new** — root shell: terminal mount, session, tabs, wake-init one-shot, repo→terminal routing |
 | `components/TopBar.tsx` | **new** — persistent status + morphing action button + Token |
 | `components/BottomTabBar.tsx` | **new** — Terminal / Repos tabs |
-| `components/ReposScreen.tsx` | **new** — repo list, local-clone intersection, Open/Clone, pull-to-refresh |
-| `hooks/useShellExec.ts` | **new** — one-off command exec over a short-lived WS with marker extraction |
+| `components/ReposScreen.tsx` | **new** — repo list, local-clone intersection, Open/Clone, pull-to-refresh; fetches via `execCommand` (`/api/exec`) |
+| `lib/api.ts` | `execCommand()` → `POST /api/exec` (raw stdout, parsed directly) |
 | `hooks/useKeyboardInset.ts` | **new** — keyboard show/hide → `--kb-inset` + refit |
 | `lib/terminal.ts` | theme/font polish, `allowProposedApi` |
 | `styles/terminal.css` | `--kb-inset`, fixed app-shell, tab content/bar, top-bar actions, repos list |

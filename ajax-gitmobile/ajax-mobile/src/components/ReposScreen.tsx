@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from 'react';
-import { useShellExec } from '../hooks/useShellExec';
+import { execCommand } from '../lib/api';
 
 interface Repo {
   name: string;
@@ -19,19 +19,12 @@ interface Props {
   onCloneRepo: (name: string) => void;
 }
 
-const SPLIT = '__REPO_SPLIT__';
-
-// One round-trip: list repos as JSON, then list local clones. The marker keeps
-// the two payloads separable in a single shell command.
+// Each command goes through the relay's /api/exec endpoint, which runs it over
+// a dedicated SSH exec channel and returns pristine stdout — no PTY prompt,
+// echo, or ANSI to scrape. Both must match the relay's server-side allowlist.
 const LIST_COMMAND =
-  `gh repo list --json name,description,updatedAt,isPrivate --limit 100; ` +
-  `printf '\\n${SPLIT}\\n'; ls -1 ~/repos 2>/dev/null || true`;
-
-// CSI escape sequences + stray carriage returns the PTY may interleave.
-function clean(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
-}
+  'gh repo list --json name,description,updatedAt,isPrivate --limit 100';
+const LOCAL_COMMAND = 'ls ~/repos';
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -52,7 +45,6 @@ function relativeTime(iso: string): string {
 }
 
 export function ReposScreen({ running, onOpenRepo, onCloneRepo }: Props) {
-  const { exec } = useShellExec();
   const [rows, setRows] = useState<RepoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +61,16 @@ export function ReposScreen({ running, onOpenRepo, onCloneRepo }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const raw = clean(await exec(LIST_COMMAND));
-      const [jsonPart = '', lsPart = ''] = raw.split(SPLIT);
-      const repos = JSON.parse(jsonPart.trim()) as Repo[];
+      // stdout is raw JSON from `gh` — parse directly, no sanitization needed.
+      // The local-clone listing is best-effort: `ls ~/repos` exits non-zero
+      // (rejected by the relay as an error) when the dir doesn't exist yet.
+      const [listOut, localOut] = await Promise.all([
+        execCommand(LIST_COMMAND),
+        execCommand(LOCAL_COMMAND).catch(() => ''),
+      ]);
+      const repos = JSON.parse(listOut) as Repo[];
       const local = new Set(
-        lsPart
+        localOut
           .split('\n')
           .map((l) => l.trim())
           .filter(Boolean),
@@ -90,7 +87,7 @@ export function ReposScreen({ running, onOpenRepo, onCloneRepo }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [exec, running]);
+  }, [running]);
 
   // Fetch on first mount and whenever the box transitions to running.
   useEffect(() => {

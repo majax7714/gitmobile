@@ -19,7 +19,19 @@ export function useShellSocket(term: Terminal | null) {
   const intentionalRef = useRef(false);
   const encoderRef = useRef(new TextEncoder());
 
+  // Incoming frames are coalesced and written to xterm at most once per ~16ms
+  // (~60/s). A burst of output (e.g. wake-init.sh pulling many repos at once)
+  // would otherwise fire one term.write per frame and overwhelm the DOM
+  // renderer, freezing the UI on a real device.
+  const writeBufRef = useRef<Uint8Array[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+
   const teardown = useCallback(() => {
+    if (flushTimerRef.current != null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    writeBufRef.current = [];
     dataSubRef.current?.dispose();
     dataSubRef.current = null;
     const ws = wsRef.current;
@@ -77,11 +89,42 @@ export function useShellSocket(term: Terminal | null) {
       term.focus();
     };
 
+    // Concatenate all buffered frames into one Uint8Array and write it in a
+    // single call, so xterm decodes the combined byte stream (UTF-8 sequences
+    // that straddle a frame boundary stay intact).
+    const flush = () => {
+      flushTimerRef.current = null;
+      const chunks = writeBufRef.current;
+      if (chunks.length === 0) {
+        return;
+      }
+      writeBufRef.current = [];
+      if (chunks.length === 1) {
+        term.write(chunks[0]);
+        return;
+      }
+      let total = 0;
+      for (const c of chunks) {
+        total += c.length;
+      }
+      const merged = new Uint8Array(total);
+      let offset = 0;
+      for (const c of chunks) {
+        merged.set(c, offset);
+        offset += c.length;
+      }
+      term.write(merged);
+    };
+
     ws.onmessage = (ev: MessageEvent) => {
-      if (typeof ev.data === 'string') {
-        term.write(ev.data);
-      } else {
-        term.write(new Uint8Array(ev.data as ArrayBuffer));
+      const chunk =
+        typeof ev.data === 'string'
+          ? encoderRef.current.encode(ev.data)
+          : new Uint8Array(ev.data as ArrayBuffer);
+      writeBufRef.current.push(chunk);
+      // Coalesce a burst into a single write on the next ~16ms tick.
+      if (flushTimerRef.current == null) {
+        flushTimerRef.current = window.setTimeout(flush, 16);
       }
     };
 
@@ -92,6 +135,11 @@ export function useShellSocket(term: Terminal | null) {
     };
 
     ws.onclose = () => {
+      // Render any tail still buffered before tearing the socket down.
+      if (flushTimerRef.current != null) {
+        window.clearTimeout(flushTimerRef.current);
+      }
+      flush();
       dataSubRef.current?.dispose();
       dataSubRef.current = null;
       wsRef.current = null;
