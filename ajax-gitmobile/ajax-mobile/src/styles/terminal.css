@@ -245,6 +245,144 @@ body {
   height: 100%;
 }
 
+/* xterm 5.x already uses the DOM renderer (real glyph nodes), but its stylesheet
+   sets `.xterm { user-select: none }`, which suppresses the OS long-press-to-copy
+   handles in mobile WebViews. Re-enable native selection on the rendered text and
+   restore the iOS "Copy" callout so the user can select with the OS, not just
+   xterm's programmatic selection. */
+.terminal-host .xterm,
+.terminal-host .xterm .xterm-screen,
+.terminal-host .xterm .xterm-rows {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* ---- accessory bar ---- */
+.accy-wrap {
+  flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  /* Sits above the on-screen keyboard; the keyboard pushes the viewport up so
+     this naturally rides with it on iOS/Android WebViews. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.accy-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.accy-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.accy-key {
+  flex: 0 0 auto;
+  min-width: 40px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.accy-key:active {
+  background: #30363d;
+}
+
+.accy-key:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.accy-key-active {
+  background: var(--accent);
+  color: #04162f;
+  border-color: var(--accent);
+}
+
+.accy-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.accy-hint {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 8px 0;
+}
+
+.accy-url-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 0;
+}
+
+.accy-url-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 16px; /* keep at 16px to avoid iOS zoom-on-focus */
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.accy-url-input:focus {
+  border-color: var(--accent);
+}
+
+.accy-url-btn {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #04162f;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.accy-url-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.accy-url-cancel {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
 /* ---- spinner ---- */
 .spinner {
   width: 14px;

@@ -1,5 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Browser } from '@capacitor/browser';
 import '@xterm/xterm/css/xterm.css';
 
 export interface ManagedTerminal {
@@ -43,6 +45,18 @@ export function createTerminal(container: HTMLElement): ManagedTerminal {
 
   const fit = new FitAddon();
   term.loadAddon(fit);
+
+  // URLs in terminal output (e.g. OAuth device-flow links) become tappable.
+  // The custom handler overrides the addon's default behavior, which would call
+  // window.open and try to navigate the WebView; instead we hand the URL to the
+  // Capacitor Browser plugin so it opens in the system browser (Safari View
+  // Controller on iOS). preventDefault stops any residual default navigation.
+  const webLinks = new WebLinksAddon((event, uri) => {
+    event.preventDefault();
+    void Browser.open({ url: uri });
+  });
+  term.loadAddon(webLinks);
+
   term.open(container);
   fit.fit();
 

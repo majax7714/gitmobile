@@ -6,6 +6,7 @@ import { useShellSocket } from '../hooks/useShellSocket';
 import { useHeartbeat } from '../hooks/useHeartbeat';
 import { StatusPill } from './StatusPill';
 import { WakeButton } from './WakeButton';
+import { TerminalAccessoryBar } from './TerminalAccessoryBar';
 
 export function TerminalScreen({ onResetToken }: { onResetToken: () => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -14,7 +15,7 @@ export function TerminalScreen({ onResetToken }: { onResetToken: () => void }) {
   const [online, setOnline] = useState(true);
 
   const { tracked, waking, error, wake } = useRelaySession();
-  const { state: shellState, connect, disconnect } = useShellSocket(term);
+  const { state: shellState, connect, disconnect, sendInput } = useShellSocket(term);
 
   // Heartbeat only while a shell is actually connected.
   useHeartbeat(shellState === 'connected');
@@ -106,6 +107,12 @@ export function TerminalScreen({ onResetToken }: { onResetToken: () => void }) {
       {error && <div className="banner banner-error">{error}</div>}
 
       <div className="terminal-host" ref={containerRef} />
+
+      <TerminalAccessoryBar
+        term={term}
+        sendInput={sendInput}
+        disabled={!connected}
+      />
     </div>
   );
 }

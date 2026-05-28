@@ -43,8 +43,11 @@ export function useShellSocket(term: Terminal | null) {
   const disconnect = useCallback(() => {
     intentionalRef.current = true;
     teardown();
+    // Clear the PTY screen/scrollback so a later Connect starts on a clean
+    // terminal — reconnecting always opens a fresh shell, not a resumed one.
+    term?.reset();
     setState('idle');
-  }, [teardown]);
+  }, [teardown, term]);
 
   const connect = useCallback(async () => {
     if (!term) {
@@ -101,6 +104,16 @@ export function useShellSocket(term: Terminal | null) {
     };
   }, [term, teardown]);
 
+  // Sends raw input bytes to the shell — same path as xterm.onData, used by the
+  // accessory bar (arrows, Ctrl combos, paste, …). No-op if the socket is not
+  // open so callers don't need to mirror connection state.
+  const sendInput = useCallback((data: string) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(encoderRef.current.encode(data));
+    }
+  }, []);
+
   // Tear down on unmount.
   useEffect(() => {
     return () => {
@@ -109,5 +122,5 @@ export function useShellSocket(term: Terminal | null) {
     };
   }, [teardown]);
 
-  return { state, connect, disconnect };
+  return { state, connect, disconnect, sendInput };
 }
