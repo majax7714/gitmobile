@@ -10,10 +10,11 @@
   --green: #3fb950;
   --yellow: #d29922;
   --red: #f85149;
-  /* Set by useKeyboardInset to the on-screen keyboard height; the app shell's
-     bottom rides up by this amount so the input stays flush above the keyboard
-     (the WebView itself does not resize — KeyboardResize.None). */
-  --kb-inset: 0px;
+  /* Set by useKeyboardInset to the on-screen keyboard height. The app shell
+     reserves this as bottom padding so its flex children (terminal, accessory
+     bar, tab nav) ride up above the keyboard — the WebView itself never resizes
+     (KeyboardResize.None). */
+  --kb-height: 0px;
 }
 
 * {
@@ -53,29 +54,33 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* The tabbed app shell is pinned to the viewport; its bottom edge rides up by
-   the keyboard height so content (and the accessory bar) stays above the
-   keyboard while the WebView itself never resizes. */
+/* Strict flex column the full height of the dynamic viewport. The keyboard
+   height is reserved as bottom padding (not a resize), so the children below
+   the terminal — accessory bar and tab nav — ride up above the keyboard and the
+   terminal (flex: 1) shrinks to fill what's left. overflow:hidden guarantees no
+   child can paint outside this box. */
 .app-shell {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: var(--kb-inset, 0px);
-  height: auto;
-  padding-bottom: 0;
-  transition: bottom 0.18s ease-out;
+  height: 100vh;
+  height: 100dvh; /* dvh: tracks the dynamic viewport on iOS; vh is the fallback */
+  padding-bottom: var(--kb-height, 0px);
+  overflow: hidden;
+  transition: padding-bottom 0.18s ease-out;
+}
+
+/* ---- top bar ---- */
+.top-bar {
+  flex: 0 0 auto;
 }
 
 /* ---- tabbed content ---- */
 .tab-content {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
 }
 
 .tab-pane {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -87,10 +92,13 @@ body {
 
 /* ---- bottom tab bar ---- */
 .tab-bar {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
   background: var(--panel);
   border-top: 1px solid var(--border);
+  /* Bottom edge of the screen when the keyboard is hidden, so it owns the
+     home-indicator safe area. When the keyboard is up, --kb-height lifts the
+     whole shell and the keyboard supplies its own safe area. */
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -322,6 +330,7 @@ body {
 
 /* ---- banners ---- */
 .banner {
+  flex: 0 0 auto;
   margin: 0 16px 8px;
   padding: 8px 12px;
   border-radius: 8px;
@@ -343,8 +352,12 @@ body {
 
 /* ---- terminal host ---- */
 .terminal-host {
-  flex: 1;
+  flex: 1 1 0;
+  /* min-height:0 lets this flex child shrink below xterm's content height;
+     overflow:hidden clips the rows while a pending fit() catches up, so they
+     can never bleed over the accessory bar. */
   min-height: 0;
+  overflow: hidden;
   padding: 6px 8px;
   background: var(--bg);
 }
@@ -368,12 +381,12 @@ body {
 
 /* ---- accessory bar ---- */
 .accy-wrap {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   background: var(--panel);
   border-top: 1px solid var(--border);
-  /* Sits above the on-screen keyboard; the keyboard pushes the viewport up so
-     this naturally rides with it on iOS/Android WebViews. */
-  padding-bottom: env(safe-area-inset-bottom);
+  /* No safe-area padding here: the accessory bar is never the screen's bottom
+     edge (the tab nav always sits below it). It rides above the keyboard via
+     the shell's --kb-height padding. */
 }
 
 .accy-bar {

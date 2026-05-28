@@ -99,21 +99,25 @@ export function useShellSocket(term: Terminal | null) {
         return;
       }
       writeBufRef.current = [];
+
+      let data: Uint8Array;
       if (chunks.length === 1) {
-        term.write(chunks[0]);
-        return;
+        data = chunks[0];
+      } else {
+        let total = 0;
+        for (const c of chunks) {
+          total += c.length;
+        }
+        data = new Uint8Array(total);
+        let offset = 0;
+        for (const c of chunks) {
+          data.set(c, offset);
+          offset += c.length;
+        }
       }
-      let total = 0;
-      for (const c of chunks) {
-        total += c.length;
-      }
-      const merged = new Uint8Array(total);
-      let offset = 0;
-      for (const c of chunks) {
-        merged.set(c, offset);
-        offset += c.length;
-      }
-      term.write(merged);
+      // Pin to the bottom once the write has been parsed, so new output is
+      // always visible — including right after a keyboard show shrinks the view.
+      term.write(data, () => term.scrollToBottom());
     };
 
     ws.onmessage = (ev: MessageEvent) => {

@@ -27,8 +27,28 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
 
   useHeartbeat(shellState === 'connected');
 
-  const refit = useCallback(() => managedRef.current?.fit.fit(), []);
-  useKeyboardInset(refit);
+  // Any layout change (keyboard show/hide, tab switch, orientation, resize)
+  // recomputes xterm's rows/cols and re-pins to the bottom. Debounced to ~50ms
+  // so a burst of events fits once instead of thrashing.
+  const refitTimerRef = useRef<number | null>(null);
+  const scheduleRefit = useCallback(() => {
+    if (refitTimerRef.current != null) {
+      window.clearTimeout(refitTimerRef.current);
+    }
+    refitTimerRef.current = window.setTimeout(() => {
+      refitTimerRef.current = null;
+      const managed = managedRef.current;
+      if (!managed) {
+        return;
+      }
+      managed.fit.fit();
+      // The fit may have shrunk the viewport (e.g. keyboard opening); keep the
+      // active input line in view.
+      managed.term.scrollToBottom();
+    }, 50);
+  }, []);
+
+  useKeyboardInset(scheduleRefit);
 
   // Mount the xterm terminal once.
   useEffect(() => {
@@ -40,26 +60,34 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
     managedRef.current = managed;
     setTerm(managed.term);
 
-    const onResize = () => managed.fit.fit();
-    window.addEventListener('resize', onResize);
-
     return () => {
-      window.removeEventListener('resize', onResize);
+      if (refitTimerRef.current != null) {
+        window.clearTimeout(refitTimerRef.current);
+        refitTimerRef.current = null;
+      }
       managed.dispose();
       managedRef.current = null;
       setTerm(null);
     };
   }, []);
 
+  // Reflow on viewport changes — window resize and orientation flips.
+  useEffect(() => {
+    window.addEventListener('resize', scheduleRefit);
+    window.addEventListener('orientationchange', scheduleRefit);
+    return () => {
+      window.removeEventListener('resize', scheduleRefit);
+      window.removeEventListener('orientationchange', scheduleRefit);
+    };
+  }, [scheduleRefit]);
+
   // Refit when a shell connects or when the terminal tab becomes visible again
   // (it has no measurable size while display:none on the Repos tab).
   useEffect(() => {
     if (shellState === 'connected' || tab === 'terminal') {
-      const id = window.setTimeout(() => managedRef.current?.fit.fit(), 0);
-      return () => window.clearTimeout(id);
+      scheduleRefit();
     }
-    return undefined;
-  }, [shellState, tab]);
+  }, [shellState, tab, scheduleRefit]);
 
   // Surface network changes; a real drop is also caught by the socket's onclose.
   useEffect(() => {
