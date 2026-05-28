@@ -21,6 +21,10 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
   const [term, setTerm] = useState<Terminal | null>(null);
   const [online, setOnline] = useState(true);
   const [tab, setTab] = useState<Tab>('terminal');
+  // The accessory bar and the bottom tab nav are mutually exclusive: the nav
+  // shows while typing is idle, the accessory bar takes its place (above the
+  // keyboard) while typing. Flipped by the keyboard listeners below.
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const { tracked, waking, error, wake } = useRelaySession();
   const { state: shellState, connect, disconnect, sendInput } = useShellSocket(term);
@@ -48,7 +52,22 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
     }, 50);
   }, []);
 
-  useKeyboardInset(scheduleRefit);
+  // Keyboard show/hide swaps the accessory bar ⇄ tab nav, then refits so the
+  // terminal absorbs the freed/lost space and the input line stays in view.
+  const onKeyboardChange = useCallback(
+    (visible: boolean) => {
+      setKeyboardVisible(visible);
+      scheduleRefit();
+    },
+    [scheduleRefit],
+  );
+  useKeyboardInset(onKeyboardChange);
+
+  // Tapping the terminal focuses xterm, which raises the keyboard again after a
+  // dismiss (must run inside the tap gesture for iOS to allow it).
+  const focusTerminal = useCallback(() => {
+    managedRef.current?.term.focus();
+  }, []);
 
   // Mount the xterm terminal once.
   useEffect(() => {
@@ -81,13 +100,14 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
     };
   }, [scheduleRefit]);
 
-  // Refit when a shell connects or when the terminal tab becomes visible again
-  // (it has no measurable size while display:none on the Repos tab).
+  // Refit when a shell connects, when the terminal tab becomes visible again
+  // (it has no measurable size while display:none on the Repos tab), or when the
+  // keyboard toggle adds/removes the accessory bar or tab nav.
   useEffect(() => {
     if (shellState === 'connected' || tab === 'terminal') {
       scheduleRefit();
     }
-  }, [shellState, tab, scheduleRefit]);
+  }, [shellState, tab, keyboardVisible, scheduleRefit]);
 
   // Surface network changes; a real drop is also caught by the socket's onclose.
   useEffect(() => {
@@ -198,12 +218,16 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
 
       <div className="tab-content">
         <div className={`tab-pane${tab === 'terminal' ? '' : ' tab-hidden'}`}>
-          <div className="terminal-host" ref={containerRef} />
-          <TerminalAccessoryBar
-            term={term}
-            sendInput={sendInput}
-            disabled={!connected}
-          />
+          <div className="terminal-host" ref={containerRef} onClick={focusTerminal} />
+          {/* Accessory bar only while typing — it replaces the tab nav and rides
+              just above the keyboard. */}
+          {keyboardVisible && (
+            <TerminalAccessoryBar
+              term={term}
+              sendInput={sendInput}
+              disabled={!connected}
+            />
+          )}
         </div>
         <div className={`tab-pane${tab === 'repos' ? '' : ' tab-hidden'}`}>
           <ReposScreen
@@ -214,7 +238,9 @@ export function AppShell({ onResetToken }: { onResetToken: () => void }) {
         </div>
       </div>
 
-      <BottomTabBar active={tab} onChange={setTab} />
+      {/* Tab nav only when the keyboard is down — hidden while typing so the
+          accessory bar can take the bottom slot. */}
+      {!keyboardVisible && <BottomTabBar active={tab} onChange={setTab} />}
     </div>
   );
 }

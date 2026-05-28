@@ -27,6 +27,9 @@ export function createTerminal(container: HTMLElement): ManagedTerminal {
     // Normalize bare \n to \r\n so lines render efficiently without the cursor
     // walking right.
     convertEol: true,
+    // Jump the view to the bottom on any keystroke (xterm default, set
+    // explicitly) so typing always reveals the active prompt line.
+    scrollOnUserInput: true,
     // Lets addons opt into proposed xterm APIs.
     allowProposedApi: true,
     theme: {

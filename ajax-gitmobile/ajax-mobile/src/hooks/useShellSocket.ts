@@ -115,9 +115,11 @@ export function useShellSocket(term: Terminal | null) {
           offset += c.length;
         }
       }
-      // Pin to the bottom once the write has been parsed, so new output is
-      // always visible — including right after a keyboard show shrinks the view.
-      term.write(data, () => term.scrollToBottom());
+      // Pin to the bottom on every write so the active input line stays in view
+      // as output streams in — including right after a keyboard show shrinks
+      // the viewport.
+      term.write(data);
+      term.scrollToBottom();
     };
 
     ws.onmessage = (ev: MessageEvent) => {
